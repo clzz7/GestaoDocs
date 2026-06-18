@@ -8,6 +8,7 @@ import { processTrct } from '../lib/process-trct';
 export default function ToolPage({ module, onResults }) {
   const [file, setFile] = useState(null);
   const [processing, setProcessing] = useState(false);
+  const [progressInfo, setProgressInfo] = useState(null);
   const [error, setError] = useState(null);
   const accent = '#1a3a5c';
 
@@ -23,20 +24,24 @@ export default function ToolPage({ module, onResults }) {
   };
 
   const runProcess = async (filePath) => {
-    setProcessing(true); setError(null);
+    setProcessing(true); setProgressInfo({ message: 'Lendo arquivo...', progress: 10 }); setError(null);
     const start = performance.now();
     try {
       const pdfBytes = await readBinaryFile(filePath);
+      setProgressInfo({ message: 'Extraindo texto das pÃ¡ginas...', progress: 35 });
       const pageTexts = await extractTextFromPdf(pdfBytes);
+      setProgressInfo({ message: 'Identificando funcionÃ¡rios...', progress: 70 });
       const { employees, totalPages } = processTrct(pageTexts);
       const employeesWithPdf = [];
-      for (const emp of employees) {
+      for (let i = 0; i < employees.length; i++) {
+        const emp = employees[i];
+        setProgressInfo({ message: 'Separando ' + (i + 1) + ' de ' + employees.length + '...', progress: 70 + Math.round(((i + 1) / employees.length) * 30) });
         const empPdfBytes = await extractPages(pdfBytes, emp.pageIndices);
         employeesWithPdf.push({ ...emp, pdfBytes: empPdfBytes });
       }
       onResults({ employees: employeesWithPdf, totalPages, totalEmployees: employees.length, processingTimeMs: Math.round(performance.now() - start), documentType: 'TRCT' });
     } catch (err) { setError('Erro: ' + (err.message ?? err)); }
-    finally { setProcessing(false); }
+    finally { setProcessing(false); setProgressInfo(null); }
   };
 
   return (
@@ -53,7 +58,7 @@ export default function ToolPage({ module, onResults }) {
           <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-border bg-white" />
           <div className="relative z-10 flex flex-col items-center justify-center h-full gap-5 py-16 px-8">
             {processing ? (
-              <div className="w-16 h-16 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: accent + ' transparent ' + accent + ' ' + accent }} />
+              <><div className="w-16 h-16 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: accent + ' transparent ' + accent + ' ' + accent }} /><p className="text-text-muted font-medium">{progressInfo?.message ?? 'Processando...'}</p></>
             ) : file && !error ? (
               <><CheckCircle2 className="w-14 h-14" style={{ color: accent }} /><p className="text-text font-semibold text-lg">{file}</p></>
             ) : (
