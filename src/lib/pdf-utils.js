@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import { PDFDocument } from 'pdf-lib';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
@@ -20,4 +21,19 @@ export async function extractTextFromPdf(pdfBytes) {
 export function hasUsableText(text) {
   const nonWhitespace = text.replace(/\s/g, '').length;
   return nonWhitespace >= 12;
+}
+
+export async function getPdfPageCount(pdfBytes) {
+  const doc = await PDFDocument.load(new Uint8Array(pdfBytes), { ignoreEncryption: true });
+  return doc.getPageCount();
+}
+
+export async function extractPages(pdfBytes, pageIndices) {
+  const srcDoc = await PDFDocument.load(new Uint8Array(pdfBytes), { ignoreEncryption: true });
+  const newDoc = await PDFDocument.create();
+  const copiedPages = await newDoc.copyPages(srcDoc, pageIndices);
+  for (const page of copiedPages) {
+    newDoc.addPage(page);
+  }
+  return await newDoc.save();
 }
