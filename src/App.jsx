@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, FileText, Shield, Code } from 'lucide-react';
+import { Home, FileText, Shield, Code, Layers, ChevronDown } from 'lucide-react';
 import ResultsPanel from './components/ResultsPanel';
 import ToolPage from './components/ToolPage';
 import TitleBar from './components/TitleBar';
@@ -7,8 +7,11 @@ import TitleBar from './components/TitleBar';
 function App() {
   const [page, setPage] = useState('home');
   const [results, setResults] = useState(null);
+  const [openGroups, setOpenGroups] = useState({ rh: true });
+  const toggleGroup = (g) => setOpenGroups(p => ({ ...p, [g]: !p[g] }));
   const handleResults = (data) => { setResults(data); setPage('results'); };
   const handleReset = () => { setResults(null); setPage('home'); };
+
   const renderMenuItem = (item) => {
     const Icon = item.icon;
     const isActive = page === item.id;
@@ -26,9 +29,15 @@ function App() {
         <aside className="w-64 bg-white border-r border-border flex flex-col shrink-0 z-10">
           <div className="p-5 flex-1 overflow-y-auto no-drag">
             {renderMenuItem({ id: 'home', label: 'InÃ­cio', icon: Home })}
-            <div className="mt-4 flex flex-col gap-1">
-              {renderMenuItem({ id: 'trct', label: 'Termos de RescisÃ£o', icon: FileText })}
-              {renderMenuItem({ id: 'seguro', label: 'ApÃ³lices de Seguro', icon: Shield })}
+            <div className="mt-6 mb-2">
+              <button onClick={() => toggleGroup('rh')} className="flex items-center justify-between w-full px-2 py-1.5 outline-none">
+                <span className="text-[11px] font-bold text-[#94a3b8] uppercase tracking-widest">FunÃ§Ãµes Especiais / RH</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[#94a3b8] transition-transform duration-200 ${openGroups.rh ? '' : '-rotate-90'}`} />
+              </button>
+              <div className={`flex flex-col gap-1 overflow-hidden transition-all duration-300 ${openGroups.rh ? 'max-h-64 mt-1' : 'max-h-0'}`}>
+                {renderMenuItem({ id: 'trct', label: 'Termos de RescisÃ£o', icon: FileText })}
+                {renderMenuItem({ id: 'seguro', label: 'ApÃ³lices de Seguro', icon: Shield })}
+              </div>
             </div>
           </div>
           <div className="p-4 border-t border-border bg-white no-drag"><div className="flex items-center gap-2 justify-center text-xs text-text-muted font-medium"><Code className="w-3.5 h-3.5 text-[#1a3a5c]" /> Desenvolvido por Carlos</div></div>
