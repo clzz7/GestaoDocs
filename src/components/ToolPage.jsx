@@ -21,8 +21,7 @@ export default function ToolPage({ module, onResults }) {
   const handleClick = async () => {
     if (processing) return;
     try {
-      const filePath = await selectPdfFile();
-      if (!filePath) return;
+      const filePath = await selectPdfFile(); if (!filePath) return;
       setFile(filePath.split(/[\\/]/).pop()); setError(null);
       await runProcess(filePath);
     } catch (err) { setError('Erro: ' + (err.message ?? err)); }
@@ -33,7 +32,7 @@ export default function ToolPage({ module, onResults }) {
     const start = performance.now();
     try {
       const pdfBytes = await readBinaryFile(filePath);
-      setProgressInfo({ message: 'Extraindo texto das pÃ¡ginas...', progress: 35 });
+      setProgressInfo({ message: 'Extraindo texto...', progress: 35 });
       const pageTexts = await extractTextFromPdf(pdfBytes);
       setProgressInfo({ message: 'Identificando funcionÃ¡rios...', progress: 70 });
       const { employees, totalPages } = (module === 'seguro' ? processSeguro : processTrct)(pageTexts);
@@ -59,6 +58,34 @@ export default function ToolPage({ module, onResults }) {
     setSeguroPath(fp); setSeguroFile(fp.split(/[\\/]/).pop());
   };
 
+  const handleCombinedProcess = async () => {
+    if (processing) return;
+    setProcessing(true); setError(null); setProgressInfo({ message: 'Lendo arquivos...', progress: 10 });
+    const start = performance.now();
+    try {
+      const [trctBytes, seguroBytes] = await Promise.all([readBinaryFile(trctPath), readBinaryFile(seguroPath)]);
+      setProgressInfo({ message: 'Extraindo TRCT...', progress: 25 });
+      const trctTexts = await extractTextFromPdf(trctBytes);
+      setProgressInfo({ message: 'Extraindo Seguro...', progress: 40 });
+      const seguroTexts = await extractTextFromPdf(seguroBytes);
+      setProgressInfo({ message: 'Combinando funcionÃ¡rios...', progress: 55 });
+      const { employees: trctEmps, totalPages } = processTrct(trctTexts);
+      const { employees: seguroEmps } = processSeguro(seguroTexts);
+      const segMap = new Map(seguroEmps.map((e) => [e.name, e]));
+      const employeesWithPdf = [];
+      for (let i = 0; i < trctEmps.length; i++) {
+        const emp = trctEmps[i];
+        setProgressInfo({ message: 'Combinando ' + (i + 1) + ' de ' + trctEmps.length + '...', progress: 55 + Math.round(((i + 1) / trctEmps.length) * 45) });
+        const trctPdf = await extractPages(trctBytes, emp.pageIndices);
+        const seg = segMap.get(emp.name);
+        const segPdf = seg ? await extractPages(seguroBytes, seg.pageIndices) : null;
+        employeesWithPdf.push({ ...emp, pdfBytes: trctPdf, seguroPdfBytes: segPdf });
+      }
+      onResults({ employees: employeesWithPdf, totalPages, totalEmployees: trctEmps.length, processingTimeMs: Math.round(performance.now() - start), documentType: 'COMBINED' });
+    } catch (err) { setError('Erro: ' + (err.message ?? err)); }
+    finally { setProcessing(false); setProgressInfo(null); }
+  };
+
   if (isCombined) {
     return (
       <div className="flex flex-col h-full bg-background font-sans no-drag">
@@ -77,7 +104,8 @@ export default function ToolPage({ module, onResults }) {
               <p className="text-sm font-medium text-text text-center">{seguroFile ?? 'Seguro â€” Clique para selecionar'}</p>
             </div>
           </div>
-          <button disabled className="mt-2 px-8 py-3 rounded-xl text-white font-medium opacity-50 cursor-not-allowed" style={{ background: accent }}>Processar combinado</button>
+          <button onClick={handleCombinedProcess} className="mt-2 px-8 py-3 rounded-xl text-white font-medium cursor-pointer" style={{ background: accent }}>Processar combinado</button>
+          {error && <div className="max-w-2xl w-full bg-red-50 border border-red-200 text-red-700 px-5 py-3 rounded-xl text-sm">{error}</div>}
         </main>
       </div>
     );
