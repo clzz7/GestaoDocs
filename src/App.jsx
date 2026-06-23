@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Home, FileText, Shield, Code, Layers, Banknote, ChevronDown } from 'lucide-react';
 import ResultsPanel from './components/ResultsPanel';
+import EfficiencyMetrics from './components/EfficiencyMetrics';
 import ToolPage from './components/ToolPage';
 import FgtsPage from './components/FgtsPage';
 import TitleBar from './components/TitleBar';
@@ -47,7 +48,7 @@ function App() {
         <main className="flex-1 flex flex-col relative overflow-hidden bg-background no-drag">
           {page === 'fgts' && <FgtsPage />}
           {(page === 'trct' || page === 'seguro') && <ToolPage module={page} onResults={handleResults} />}
-          {page === 'results' && results && <div className="p-10 max-w-4xl mx-auto w-full"><ResultsPanel results={results} onReset={handleReset} /></div>}
+          {page === 'results' && results && <div className="p-10 max-w-4xl mx-auto w-full"><EfficiencyMetrics data={results} /><ResultsPanel results={results} onReset={handleReset} /></div>}
           {page === 'home' && <div className="flex-1 flex flex-col items-center justify-center p-10 text-center"><h1 className="text-3xl font-semibold text-text mb-3">Bem-vindo ao <span className="text-[#1a3a5c]">GestÃ£oDocs</span></h1></div>}
         </main>
       </div>
