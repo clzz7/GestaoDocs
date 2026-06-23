@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileText, Shield, Layers, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, FileText, Shield, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
 import { selectPdfFile } from '../lib/tauri-api';
 import { readBinaryFile } from '../lib/file-io';
 import { extractTextFromPdf, extractPages } from '../lib/pdf-utils';
@@ -50,16 +50,20 @@ export default function ToolPage({ module, onResults }) {
   const handleTrctClick = async () => {
     if (processing) return;
     const fp = await selectPdfFile(); if (!fp) return;
-    setTrctPath(fp); setTrctFile(fp.split(/[\\/]/).pop());
+    setTrctPath(fp); setTrctFile(fp.split(/[\\/]/).pop()); setError(null);
   };
   const handleSeguroClick = async () => {
     if (processing) return;
     const fp = await selectPdfFile(); if (!fp) return;
-    setSeguroPath(fp); setSeguroFile(fp.split(/[\\/]/).pop());
+    setSeguroPath(fp); setSeguroFile(fp.split(/[\\/]/).pop()); setError(null);
   };
 
   const handleCombinedProcess = async () => {
     if (processing) return;
+    if (!trctPath || !seguroPath) {
+      setError('Selecione os dois arquivos PDF antes de processar.');
+      return;
+    }
     setProcessing(true); setError(null); setProgressInfo({ message: 'Lendo arquivos...', progress: 10 });
     const start = performance.now();
     try {
@@ -68,7 +72,7 @@ export default function ToolPage({ module, onResults }) {
       const trctTexts = await extractTextFromPdf(trctBytes);
       setProgressInfo({ message: 'Extraindo Seguro...', progress: 40 });
       const seguroTexts = await extractTextFromPdf(seguroBytes);
-      setProgressInfo({ message: 'Combinando funcionÃ¡rios...', progress: 55 });
+      setProgressInfo({ message: 'Combinando...', progress: 55 });
       const { employees: trctEmps, totalPages } = processTrct(trctTexts);
       const { employees: seguroEmps } = processSeguro(seguroTexts);
       const segMap = new Map(seguroEmps.map((e) => [e.name, e]));
@@ -105,7 +109,7 @@ export default function ToolPage({ module, onResults }) {
             </div>
           </div>
           <button onClick={handleCombinedProcess} className="mt-2 px-8 py-3 rounded-xl text-white font-medium cursor-pointer" style={{ background: accent }}>Processar combinado</button>
-          {error && <div className="max-w-2xl w-full bg-red-50 border border-red-200 text-red-700 px-5 py-3 rounded-xl text-sm">{error}</div>}
+          {error && <div className="max-w-2xl w-full bg-red-50 border border-red-200 text-red-700 px-5 py-3 rounded-xl text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
         </main>
       </div>
     );
