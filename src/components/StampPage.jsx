@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Stamp, ImagePlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Stamp, ImagePlus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { selectPdfFile, selectImageFile } from '../lib/tauri-api';
 import { readBinaryFile } from '../lib/file-io';
@@ -71,6 +71,17 @@ export default function StampPage() {
     dragRef.current = { id, startX: e.clientX, startY: e.clientY, initX: pl.x, initY: pl.y };
   };
 
+  const handleResize = (e) => {
+    const w = parseFloat(e.target.value);
+    setPlacements(prev => prev.map(p => p.id === selectedId ? { ...p, w } : p));
+  };
+
+  const handleDelete = () => {
+    if (!selectedId) return;
+    setPlacements(prev => prev.filter(p => p.id !== selectedId));
+    setSelectedId(null);
+  };
+
   useEffect(() => {
     const onMove = (e) => {
       if (!dragRef.current || !canvasRef.current) return;
@@ -86,6 +97,8 @@ export default function StampPage() {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [hNorm]);
 
+  const sel = placements.find(p => p.id === selectedId);
+
   return (
     <div className="flex flex-col h-full bg-background font-sans no-drag">
       <header className="flex items-center gap-4 px-10 pt-8 pb-4">
@@ -99,11 +112,18 @@ export default function StampPage() {
             <div className="flex items-center gap-3">
               <button onClick={handleSelectImage} className="px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium">Selecionar Imagem</button>
               {imageDataUrl && <button onClick={handleAddStamp} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ background: accent }}>Inserir Carimbo</button>}
+              {sel && (
+                <div className="flex items-center gap-2 ml-4 bg-white px-3 py-1.5 rounded-xl border border-border">
+                  <span className="text-xs text-text-muted">Tamanho:</span>
+                  <input type="range" min="0.05" max="0.8" step="0.01" value={sel.w} onChange={handleResize} className="w-24" />
+                  <button onClick={handleDelete} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              )}
             </div>
             <div className="relative border border-border rounded-xl shadow-sm bg-white overflow-hidden">
               <canvas ref={canvasRef} />
               {placements.filter(p => p.pageIndex === pageIndex).map(p => (
-                <div key={p.id} onMouseDown={(e) => handleMouseDown(e, p.id)} className="absolute border-2 border-dashed border-blue-500 cursor-move" style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%`, height: `${hNorm(p.w) * 100}%` }}>
+                <div key={p.id} onMouseDown={(e) => handleMouseDown(e, p.id)} className={`absolute border-2 ${p.id === selectedId ? 'border-blue-500' : 'border-transparent'} cursor-move`} style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, width: `${p.w * 100}%`, height: `${hNorm(p.w) * 100}%` }}>
                   <img src={imageDataUrl} className="w-full h-full object-contain pointer-events-none" />
                 </div>
               ))}
