@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { Home, FileText, Shield, Code, Layers, Banknote, ChevronDown } from 'lucide-react';
+import { Home, FileText, Shield, Code, Layers, Banknote, Stamp, ChevronDown } from 'lucide-react';
 import ResultsPanel from './components/ResultsPanel';
 import EfficiencyMetrics from './components/EfficiencyMetrics';
 import ToolPage from './components/ToolPage';
 import FgtsPage from './components/FgtsPage';
+import StampPage from './components/StampPage';
 import TitleBar from './components/TitleBar';
 
 function App() {
   const [page, setPage] = useState('home');
   const [results, setResults] = useState(null);
-  const [openGroups, setOpenGroups] = useState({ rh: true });
+  const [openGroups, setOpenGroups] = useState({ rh: true, tools: true });
   const toggleGroup = (g) => setOpenGroups(p => ({ ...p, [g]: !p[g] }));
   const handleResults = (data) => { setResults(data); setPage('results'); };
   const handleReset = () => { setResults(null); setPage('home'); };
@@ -42,10 +43,20 @@ function App() {
                 {renderMenuItem({ id: 'fgts', label: 'Extrato FGTS', icon: Banknote })}
               </div>
             </div>
+            <div className="mt-4 mb-2">
+              <button onClick={() => toggleGroup('tools')} className="flex items-center justify-between w-full px-2 py-1.5 outline-none">
+                <span className="text-[11px] font-bold text-[#94a3b8] uppercase tracking-widest">Ferramentas PDF</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-[#94a3b8] transition-transform duration-200 ${openGroups.tools ? '' : '-rotate-90'}`} />
+              </button>
+              <div className={`flex flex-col gap-1 overflow-hidden transition-all duration-300 ${openGroups.tools ? 'max-h-64 mt-1' : 'max-h-0'}`}>
+                {renderMenuItem({ id: 'stamp', label: 'Carimbo em PDF', icon: Stamp })}
+              </div>
+            </div>
           </div>
           <div className="p-4 border-t border-border bg-white no-drag"><div className="flex items-center gap-2 justify-center text-xs text-text-muted font-medium"><Code className="w-3.5 h-3.5 text-[#1a3a5c]" /> Desenvolvido por Carlos</div></div>
         </aside>
         <main className="flex-1 flex flex-col relative overflow-hidden bg-background no-drag">
+          {page === 'stamp' && <StampPage />}
           {page === 'fgts' && <FgtsPage />}
           {(page === 'trct' || page === 'seguro') && <ToolPage module={page} onResults={handleResults} />}
           {page === 'results' && results && <div className="p-10 max-w-4xl mx-auto w-full"><EfficiencyMetrics data={results} /><ResultsPanel results={results} onReset={handleReset} /></div>}
