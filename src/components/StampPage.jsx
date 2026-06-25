@@ -94,7 +94,7 @@ export default function StampPage() {
         const { width, height } = page.getSize();
         const h = hNorm(p.w);
         const x_pdf = p.x * width;
-        const y_pdf = p.y * height;
+        const y_pdf = height - (p.y * height) - (h * height);
         page.drawImage(pdfImage, { x: x_pdf, y: y_pdf, width: p.w * width, height: h * height });
       }
       const saved = await doc.save();
