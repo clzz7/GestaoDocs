@@ -6,6 +6,7 @@ import ToolPage from './components/ToolPage';
 import FgtsPage from './components/FgtsPage';
 import StampPage from './components/StampPage';
 import ConvertPage from './components/ConvertPage';
+import OrganizePage from './components/OrganizePage';
 import TitleBar from './components/TitleBar';
 import { isTauri } from './lib/tauri-api';
 
@@ -74,6 +75,7 @@ function App() {
     if (page === 'carimbo') return <StampPage />;
     if (page === 'fgts') return <FgtsPage />;
     if (page === 'convert') return <ConvertPage />;
+    if (page === 'organize') return <OrganizePage />;
     if (page === 'trct' || page === 'seguro') {
       return <ToolPage module={page} onResults={(data) => handleResults(data, page)} />;
     }
@@ -145,6 +147,7 @@ function App() {
               <div className={`flex flex-col gap-1 overflow-hidden transition-all duration-300 ease-in-out ${openGroups.pdf ? 'max-h-64 opacity-100 mt-1' : 'max-h-0 opacity-0'}`}>
                 {renderMenuItem({ id: 'carimbo', label: 'Carimbo em PDF', icon: Stamp })}
                 {renderMenuItem({ id: 'convert', label: 'DOC → PDF', icon: FileOutput })}
+                {renderMenuItem({ id: 'organize', label: 'Organizar PDF', icon: Layers })}
               </div>
             </div>
           </div>
