@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layers, Loader2, GripVertical } from 'lucide-react';
+import { Layers, Loader2, GripVertical, RotateCw, Trash2 } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -8,12 +8,16 @@ import { readBinaryFile } from '../lib/file-io';
 import { renderPageThumbnail } from '../lib/pdf-utils';
 import { PDFDocument } from 'pdf-lib';
 
-function SortableItem({ item }) {
+function SortableItem({ item, onRotate, onDelete }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id });
   const style = { transform: CSS.Translate.toString(transform), transition };
   return (
     <div ref={setNodeRef} style={style} className="p-2 bg-white rounded-xl border border-border flex flex-col items-center relative group">
       <div {...attributes} {...listeners} className="absolute top-2 left-2 cursor-grab"><GripVertical className="w-4 h-4 text-text-muted" /></div>
+      <div className="absolute top-2 right-2 flex gap-1">
+        <button onClick={() => onRotate(item.id)} className="p-1 bg-white/80 rounded hover:bg-white"><RotateCw className="w-3.5 h-3.5" /></button>
+        <button onClick={() => onDelete(item.id)} className="p-1 bg-white/80 rounded hover:bg-red-50 text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+      </div>
       {item.thumbnail ? <img src={item.thumbnail} className="w-32 h-44 object-contain" /> : <Loader2 className="w-6 h-6 animate-spin" />}
       <span className="text-xs text-text-muted mt-2">{item.label}</span>
     </div>
@@ -43,6 +47,21 @@ export default function OrganizePage() {
     }
   };
 
+  const handleRotate = (id) => {
+    setPages(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const newRot = (p.rotation + 90) % 360;
+      renderPageThumbnail(p.pdfBytes, p.pageNumber, 0.4, newRot).then(thumb => {
+        if (thumb) setPages(curr => curr.map(c => c.id === id ? { ...c, thumbnail: thumb } : c));
+      });
+      return { ...p, rotation: newRot };
+    }));
+  };
+
+  const handleDelete = (id) => {
+    setPages(prev => prev.filter(p => p.id !== id));
+  };
+
   const handleDragEnd = (event) => {
     const { active, over } = event;
     if (active.id !== over?.id) {
@@ -66,7 +85,7 @@ export default function OrganizePage() {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={pages} strategy={rectSortingStrategy}>
               <div className="grid grid-cols-4 gap-4 p-4 overflow-y-auto max-h-[500px]">
-                {pages.map(page => <SortableItem key={page.id} item={page} />)}
+                {pages.map(page => <SortableItem key={page.id} item={page} onRotate={handleRotate} onDelete={handleDelete} />)}
               </div>
             </SortableContext>
           </DndContext>
