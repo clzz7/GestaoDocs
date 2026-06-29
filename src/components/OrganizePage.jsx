@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Layers, Loader2, GripVertical, RotateCw, Trash2 } from 'lucide-react';
+import { Layers, Loader2, GripVertical, RotateCw, Trash2, Save } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { selectPdfFile } from '../lib/tauri-api';
-import { readBinaryFile } from '../lib/file-io';
-import { renderPageThumbnail } from '../lib/pdf-utils';
+import { selectPdfFile, selectPdfSaveLocation } from '../lib/tauri-api';
+import { readBinaryFile, writeBinaryFile } from '../lib/file-io';
+import { renderPageThumbnail, reorganizePages } from '../lib/pdf-utils';
 import { PDFDocument } from 'pdf-lib';
 
 function SortableItem({ item, onRotate, onDelete }) {
@@ -26,6 +26,7 @@ function SortableItem({ item, onRotate, onDelete }) {
 
 export default function OrganizePage() {
   const [pages, setPages] = useState([]);
+  const [saving, setSaving] = useState(false);
   const accent = '#1a3a5c';
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -58,19 +59,18 @@ export default function OrganizePage() {
     }));
   };
 
-  const handleDelete = (id) => {
-    setPages(prev => prev.filter(p => p.id !== id));
-  };
+  const handleDelete = (id) => setPages(prev => prev.filter(p => p.id !== id));
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    if (active.id !== over?.id) {
-      setPages((items) => {
-        const oldIndex = items.findIndex((i) => i.id === active.id);
-        const newIndex = items.findIndex((i) => i.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
+  const handleSave = async () => {
+    if (pages.length === 0) return;
+    setSaving(true);
+    try {
+      const savePath = await selectPdfSaveLocation('documento_organizado.pdf');
+      if (!savePath) { setSaving(false); return; }
+      const pageSources = pages.map(p => ({ pdfBytes: p.pdfBytes, pageNumber: p.pageNumber, rotation: p.rotation }));
+      const resultBytes = await reorganizePages(pageSources);
+      await writeBinaryFile(savePath, resultBytes);
+    } finally { setSaving(false); }
   };
 
   return (
@@ -82,13 +82,16 @@ export default function OrganizePage() {
         {pages.length === 0 ? (
           <button onClick={handleLoadPdf} className="px-6 py-3 rounded-xl text-white font-medium" style={{ background: accent }}>Selecionar PDF para organizar</button>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={pages} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-4 gap-4 p-4 overflow-y-auto max-h-[500px]">
-                {pages.map(page => <SortableItem key={page.id} item={page} onRotate={handleRotate} onDelete={handleDelete} />)}
-              </div>
-            </SortableContext>
-          </DndContext>
+          <div className="flex flex-col items-center gap-4">
+            <button onClick={handleSave} className="px-6 py-2.5 rounded-xl bg-emerald-600 text-white font-medium flex items-center gap-2"><Save className="w-4 h-4" /> Salvar PDF Organizado</button>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => { if (e.active.id !== e.over?.id) setPages(items => arrayMove(items, items.findIndex(i => i.id === e.active.id), items.findIndex(i => i.id === e.over.id))); }}>
+              <SortableContext items={pages} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-4 gap-4 p-4 overflow-y-auto max-h-[500px]">
+                  {pages.map(page => <SortableItem key={page.id} item={page} onRotate={handleRotate} onDelete={handleDelete} />)}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
         )}
       </main>
     </div>
