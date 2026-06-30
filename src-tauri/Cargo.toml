@@ -1,8 +1,10 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "Ferramenta para separaÃ§Ã£o automatizada de documentos de RH"
+version = "1.0.0"
+description = "Ferramenta para separação automatizada de documentos de RH"
 authors = ["carlo"]
+license = ""
+repository = ""
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -15,5 +17,26 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-log = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+log = "0.4"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# Native Windows PDF rendering and OCR. This uses the OCR language packs that
+# are already installed in Windows; no external executable is required.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+    "Data_Pdf",
+    "Foundation",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Storage",
+    "Storage_Streams",
+    "Win32_System_Com",
+] }
