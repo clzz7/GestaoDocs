@@ -34,6 +34,27 @@ pub async fn ocr_pdf_pages(
 }
 
 #[cfg(windows)]
+struct ComApartment;
+
+#[cfg(windows)]
+impl ComApartment {
+    fn initialize() -> Result<Self, String> {
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+        unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }
+            .ok()
+            .map_err(|e| format!("Erro COM: {e}"))?;
+        Ok(Self)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        unsafe { windows::Win32::System::Com::CoUninitialize() };
+    }
+}
+
+#[cfg(windows)]
 fn recognize_pdf_pages_with_windows<F>(
     path: &str,
     page_indices: &[u32],
@@ -50,6 +71,7 @@ where
         Media::Ocr::OcrEngine,
         Storage::{StorageFile, Streams::InMemoryRandomAccessStream},
     };
+    let _apartment = ComApartment::initialize()?;
     let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(path))
         .map_err(|e| format!("Erro: {e}"))?.get().map_err(|e| format!("Erro: {e}"))?;
     let pdf = PdfDocument::LoadFromFileAsync(&file)
@@ -61,6 +83,7 @@ where
             let tx = tx.clone();
             let pdf = pdf.clone();
             scope.spawn(move || {
+                let _apartment = ComApartment::initialize().ok();
                 let portuguese = Language::CreateLanguage(&HSTRING::from("pt-BR")).unwrap();
                 let engine = OcrEngine::TryCreateFromLanguage(&portuguese).unwrap();
                 let page = pdf.GetPage(page_index).unwrap();
