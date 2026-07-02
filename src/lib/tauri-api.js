@@ -123,3 +123,16 @@ export async function onProgress(callback) {
   });
   return unlisten;
 }
+
+/**
+ * Escuta o evento nativo de arrastar e soltar arquivos do Tauri na janela do aplicativo.
+ * @param {function} callback - Chamado com a lista de caminhos absolutos dos arquivos soltos.
+ * @returns {Promise<function>} Função de cancelamento do listener.
+ */
+export async function onFileDrop(callback) {
+  const unlisten = await listen('tauri://drag-drop', (event) => {
+    const paths = event.payload?.paths ?? [];
+    callback(paths);
+  });
+  return unlisten;
+}
