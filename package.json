@@ -1,7 +1,8 @@
 {
   "name": "gestaodocs",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "Gestão e organização automatizada de documentos de RH",
   "type": "module",
   "scripts": {
     "dev:vite": "vite",
