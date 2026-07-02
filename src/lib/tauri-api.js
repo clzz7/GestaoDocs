@@ -2,8 +2,11 @@
  * tauri-api.js
  *
  * Módulo central de integração com as APIs nativas do Tauri e utilitários do sistema.
- * Gerencia comandos do sistema operacional e re-exporta utilitários de I/O e caixas de diálogo.
+ * Gerencia comandos IPC em Rust (OCR nativo), execução de comandos PowerShell (conversão DOC)
+ * e re-exporta utilitários de I/O e caixas de diálogo.
  */
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { Command } from '@tauri-apps/plugin-shell';
 
 export {
@@ -27,6 +30,17 @@ export {
  */
 export function isTauri() {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+/**
+ * Envia páginas específicas de um PDF para o motor nativo de OCR do Windows (WinRT).
+ *
+ * @param {string} filePath - Caminho absoluto do arquivo PDF.
+ * @param {number[]} pageIndices - Índices 0-based das páginas que necessitam de OCR.
+ * @returns {Promise<Record<number, string>>} Mapeamento pageIndex → texto reconhecido.
+ */
+export async function ocrPdfPages(filePath, pageIndices) {
+  return invoke('ocr_pdf_pages', { filePath, pageIndices });
 }
 
 /**
@@ -96,4 +110,16 @@ try {
     path: savePath,
     processingTimeMs,
   };
+}
+
+/**
+ * Escuta eventos de progresso emitidos pelo backend Rust durante o OCR.
+ * @param {function} callback - Callback chamado a cada atualização de progresso.
+ * @returns {Promise<function>} Função de cancelamento do listener.
+ */
+export async function onProgress(callback) {
+  const unlisten = await listen('processing-progress', (event) => {
+    callback(event.payload);
+  });
+  return unlisten;
 }

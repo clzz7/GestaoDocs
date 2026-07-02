@@ -1,133 +1,205 @@
-import React, { useState } from 'react';
-import { UploadCloud, FileText, Shield, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
-import { selectPdfFile } from '../lib/tauri-api';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { ArrowLeft, UploadCloud, FileText, Shield, Layers, CheckCircle2 } from 'lucide-react';
+import { selectPdfFile, onProgress, ocrPdfPages } from '../lib/tauri-api';
 import { readBinaryFile } from '../lib/file-io';
-import { extractTextFromPdf, extractPages } from '../lib/pdf-utils';
+import { extractTextFromPdf, hasUsableText, extractPages } from '../lib/pdf-utils';
 import { processTrct } from '../lib/process-trct';
 import { processSeguro } from '../lib/process-seguro';
 
-export default function ToolPage({ module, onResults }) {
-  const [file, setFile] = useState(null);
-  const [trctFile, setTrctFile] = useState(null);
-  const [trctPath, setTrctPath] = useState(null);
-  const [seguroFile, setSeguroFile] = useState(null);
-  const [seguroPath, setSeguroPath] = useState(null);
+const MODULE_META = {
+  trct: {
+    label: 'Termos de Rescisão',
+    Icon: FileText,
+    accent: '#1a3a5c',
+    hint: 'Importe o PDF consolidado com os Termos de Rescisão',
+    processTexts: (texts) => processTrct(texts),
+    combinedLabel: 'Processar junto com Seguro',
+    SecondaryIcon: Shield,
+  },
+  seguro: {
+    label: 'Apólices de Seguro',
+    Icon: Shield,
+    accent: '#1a3a5c',
+    hint: 'Importe o PDF consolidado com as Apólices de Seguro',
+    processTexts: (texts) => processSeguro(texts),
+    combinedLabel: 'Processar junto com TRCT',
+    SecondaryIcon: FileText,
+  },
+};
+
+function normalizeName(name) {
+  return name
+    .toLowerCase()
+    .replace(/[áàãâä]/g, 'a')
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[íìîï]/g, 'i')
+    .replace(/[óòõôö]/g, 'o')
+    .replace(/[úùûü]/g, 'u')
+    .replace(/ç/g, 'c')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function loadPdfWithOcr(filePath, setProgressInfo) {
+  setProgressInfo({ stage: 'reading', message: 'Lendo arquivo PDF...', progress: 5 });
+  const pdfBytes = await readBinaryFile(filePath);
+
+  setProgressInfo({ stage: 'extracting', message: 'Extraindo texto das páginas...', progress: 15 });
+  const pageTexts = await extractTextFromPdf(pdfBytes);
+  const ocrNeeded = [];
+  for (let i = 0; i < pageTexts.length; i++) {
+    if (!hasUsableText(pageTexts[i])) {
+      ocrNeeded.push(i);
+    }
+  }
+
+  if (ocrNeeded.length > 0) {
+    setProgressInfo({
+      stage: 'ocr',
+      message: `Aplicando OCR em ${ocrNeeded.length} página(s)...`,
+      progress: 25,
+    });
+
+    try {
+      const ocrResults = await ocrPdfPages(filePath, ocrNeeded);
+      for (const [pageIdx, text] of Object.entries(ocrResults)) {
+        pageTexts[Number(pageIdx)] = text;
+      }
+    } catch (err) {
+      console.warn('OCR failed, proceeding with extracted text only:', err);
+    }
+  }
+
+  return { pdfBytes, pageTexts };
+}
+
+export default function ToolPage({ module: activeModule, onResults }) {
+  const meta = MODULE_META[activeModule] || MODULE_META.trct;
+  const isCombined = false;
+  const [filePrimary, setFilePrimary] = useState(null);
+  const [fileSecondary, setFileSecondary] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [progressInfo, setProgressInfo] = useState(null);
   const [error, setError] = useState(null);
-  const accent = '#1a3a5c';
-  const isCombined = module === 'combined';
 
-  const handleClick = async () => {
-    if (processing) return;
+  useEffect(() => {
+    let unlisten;
+    onProgress((p) => {
+      setProgressInfo({ stage: p.stage, message: p.message, progress: p.progress });
+    }).then((fn) => { unlisten = fn; });
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
+  const handleSelectPrimary = async () => {
     try {
-      const filePath = await selectPdfFile(); if (!filePath) return;
-      setFile(filePath.split(/[\\/]/).pop()); setError(null);
-      await runProcess(filePath);
-    } catch (err) { setError('Erro: ' + (err.message ?? err)); }
-  };
-
-  const runProcess = async (filePath) => {
-    setProcessing(true); setProgressInfo({ message: 'Lendo arquivo...', progress: 10 }); setError(null);
-    const start = performance.now();
-    try {
-      const pdfBytes = await readBinaryFile(filePath);
-      setProgressInfo({ message: 'Extraindo texto...', progress: 35 });
-      const pageTexts = await extractTextFromPdf(pdfBytes);
-      setProgressInfo({ message: 'Identificando funcionÃ¡rios...', progress: 70 });
-      const { employees, totalPages } = (module === 'seguro' ? processSeguro : processTrct)(pageTexts);
-      const employeesWithPdf = [];
-      for (let i = 0; i < employees.length; i++) {
-        const emp = employees[i];
-        setProgressInfo({ message: 'Separando ' + (i + 1) + ' de ' + employees.length + '...', progress: 70 + Math.round(((i + 1) / employees.length) * 30) });
-        employeesWithPdf.push({ ...emp, pdfBytes: await extractPages(pdfBytes, emp.pageIndices) });
-      }
-      onResults({ employees: employeesWithPdf, totalPages, totalEmployees: employees.length, processingTimeMs: Math.round(performance.now() - start), documentType: module === 'seguro' ? 'SEGURO' : 'TRCT' });
-    } catch (err) { setError('Erro: ' + (err.message ?? err)); }
-    finally { setProcessing(false); setProgressInfo(null); }
-  };
-
-  const handleTrctClick = async () => {
-    if (processing) return;
-    const fp = await selectPdfFile(); if (!fp) return;
-    setTrctPath(fp); setTrctFile(fp.split(/[\\/]/).pop()); setError(null);
-  };
-  const handleSeguroClick = async () => {
-    if (processing) return;
-    const fp = await selectPdfFile(); if (!fp) return;
-    setSeguroPath(fp); setSeguroFile(fp.split(/[\\/]/).pop()); setError(null);
-  };
-
-  const handleCombinedProcess = async () => {
-    if (processing) return;
-    if (!trctPath || !seguroPath) {
-      setError('Selecione os dois arquivos PDF antes de processar.');
-      return;
+      const path = await selectPdfFile();
+      if (path) setFilePrimary(path);
+    } catch (err) {
+      setError(err.message || 'Erro ao selecionar arquivo');
     }
-    setProcessing(true); setError(null); setProgressInfo({ message: 'Lendo arquivos...', progress: 10 });
-    const start = performance.now();
-    try {
-      const [trctBytes, seguroBytes] = await Promise.all([readBinaryFile(trctPath), readBinaryFile(seguroPath)]);
-      setProgressInfo({ message: 'Extraindo TRCT...', progress: 25 });
-      const trctTexts = await extractTextFromPdf(trctBytes);
-      setProgressInfo({ message: 'Extraindo Seguro...', progress: 40 });
-      const seguroTexts = await extractTextFromPdf(seguroBytes);
-      setProgressInfo({ message: 'Combinando...', progress: 55 });
-      const { employees: trctEmps, totalPages } = processTrct(trctTexts);
-      const { employees: seguroEmps } = processSeguro(seguroTexts);
-      const segMap = new Map(seguroEmps.map((e) => [e.name, e]));
-      const employeesWithPdf = [];
-      for (let i = 0; i < trctEmps.length; i++) {
-        const emp = trctEmps[i];
-        setProgressInfo({ message: 'Combinando ' + (i + 1) + ' de ' + trctEmps.length + '...', progress: 55 + Math.round(((i + 1) / trctEmps.length) * 45) });
-        const trctPdf = await extractPages(trctBytes, emp.pageIndices);
-        const seg = segMap.get(emp.name);
-        const segPdf = seg ? await extractPages(seguroBytes, seg.pageIndices) : null;
-        employeesWithPdf.push({ ...emp, pdfBytes: trctPdf, seguroPdfBytes: segPdf });
-      }
-      onResults({ employees: employeesWithPdf, totalPages, totalEmployees: trctEmps.length, processingTimeMs: Math.round(performance.now() - start), documentType: 'COMBINED' });
-    } catch (err) { setError('Erro: ' + (err.message ?? err)); }
-    finally { setProcessing(false); setProgressInfo(null); }
   };
 
-  if (isCombined) {
-    return (
-      <div className="flex flex-col h-full bg-background font-sans no-drag">
-        <header className="flex items-center gap-4 px-10 pt-8 pb-4 animate-fade-in-down">
-          <div className="flex items-center gap-2"><div className="rounded-md p-1.5" style={{ background: accent + '18' }}><Layers className="w-5 h-5" style={{ color: accent }} /></div><h1 className="text-text font-semibold text-lg">Termos + ApÃ³lices (Combinado)</h1></div>
-        </header>
-        <main className="flex-1 flex flex-col items-center justify-center px-10 pb-10 gap-6 animate-fade-in-up">
-          <p className="text-text-muted text-sm max-w-md text-center">Selecione o PDF de Termos de RescisÃ£o e o de ApÃ³lices para gerar um ZIP combinado</p>
-          <div className="flex gap-4 w-full max-w-2xl">
-            <div onClick={handleTrctClick} className="flex-1 flex flex-col items-center justify-center gap-3 p-8 rounded-2xl border-2 border-dashed border-border bg-white cursor-pointer">
-              {trctFile ? <CheckCircle2 className="w-8 h-8" style={{ color: accent }} /> : <FileText className="w-8 h-8" style={{ color: accent }} />}
-              <p className="text-sm font-medium text-text text-center">{trctFile ?? 'TRCT â€” Clique para selecionar'}</p>
-            </div>
-            <div onClick={handleSeguroClick} className="flex-1 flex flex-col items-center justify-center gap-3 p-8 rounded-2xl border-2 border-dashed border-border bg-white cursor-pointer">
-              {seguroFile ? <CheckCircle2 className="w-8 h-8" style={{ color: accent }} /> : <Shield className="w-8 h-8" style={{ color: accent }} />}
-              <p className="text-sm font-medium text-text text-center">{seguroFile ?? 'Seguro â€” Clique para selecionar'}</p>
-            </div>
-          </div>
-          <button onClick={handleCombinedProcess} className="mt-2 px-8 py-3 rounded-xl text-white font-medium cursor-pointer" style={{ background: accent }}>Processar combinado</button>
-          {error && <div className="max-w-2xl w-full bg-red-50 border border-red-200 text-red-700 px-5 py-3 rounded-xl text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0" />{error}</div>}
-        </main>
-      </div>
-    );
-  }
+  const handleProcess = async () => {
+    if (!filePrimary) return;
+    setProcessing(true);
+    setError(null);
+    const startTime = performance.now();
+
+    try {
+      const { pdfBytes, pageTexts } = await loadPdfWithOcr(filePrimary, setProgressInfo);
+      setProgressInfo({ stage: 'processing', message: 'Identificando funcionários...', progress: 70 });
+
+      const parsed = meta.processTexts(pageTexts);
+      const totalEmployees = parsed.employees.length;
+
+      setProgressInfo({ stage: 'splitting', message: 'Separando páginas...', progress: 85 });
+      for (let i = 0; i < parsed.employees.length; i++) {
+        const emp = parsed.employees[i];
+        emp.pdfBytes = await extractPages(pdfBytes, emp.pageIndices);
+      }
+
+      const elapsed = Math.round(performance.now() - startTime);
+      onResults({
+        documentType: activeModule.toUpperCase(),
+        totalEmployees,
+        totalPages: parsed.totalPages,
+        employees: parsed.employees,
+        processingTimeMs: elapsed,
+      });
+    } catch (err) {
+      setError(err.message || 'Erro durante o processamento');
+    } finally {
+      setProcessing(false);
+      setProgressInfo(null);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full bg-background font-sans no-drag">
-      <header className="flex items-center gap-4 px-10 pt-8 pb-4 animate-fade-in-down">
-        <div className="flex items-center gap-2"><div className="rounded-md p-1.5" style={{ background: accent + '18' }}>{module === 'seguro' ? <Shield className="w-5 h-5" style={{ color: accent }} /> : <FileText className="w-5 h-5" style={{ color: accent }} />}</div><h1 className="text-text font-semibold text-lg">{module === 'seguro' ? 'ApÃ³lices de Seguro' : 'Termos de RescisÃ£o'}</h1></div>
-      </header>
-      <main className="flex-1 flex flex-col items-center justify-center px-10 pb-10 gap-6 animate-fade-in-up">
-        <p className="text-text-muted text-sm max-w-md text-center">Importe o PDF consolidado</p>
-        <div onClick={handleClick} className="relative w-full max-w-2xl cursor-pointer select-none" style={{ minHeight: '340px' }}>
-          <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-border bg-white" />
-          <div className="relative z-10 flex flex-col items-center justify-center h-full gap-5 py-16 px-8">
-            {processing ? <div className="w-16 h-16 rounded-full border-4 border-t-transparent animate-spin" style={{ borderColor: accent + ' transparent ' + accent + ' ' + accent }} /> : file ? <p className="text-text font-semibold text-lg">{file}</p> : <p className="text-text font-semibold text-xl">Clique para selecionar</p>}
+    <div className="flex flex-col h-full bg-background font-sans select-none overflow-y-auto custom-scrollbar no-drag">
+      <header className="px-10 pt-8 pb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${meta.accent}15` }}>
+            <meta.Icon className="w-5 h-5" style={{ color: meta.accent }} />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-text">{meta.label}</h1>
+            <p className="text-xs text-text-muted">{meta.hint}</p>
           </div>
         </div>
+      </header>
+
+      <main className="flex-1 px-10 py-6 max-w-4xl w-full mx-auto flex flex-col gap-6">
+        <div className="bg-white border border-border rounded-2xl p-8 flex flex-col items-center text-center shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-surface-hover flex items-center justify-center mb-4 text-[#1a3a5c]">
+            <UploadCloud className="w-8 h-8" />
+          </div>
+          <h3 className="text-base font-semibold text-text mb-1">
+            {filePrimary ? filePrimary.split(/[/\\]/).pop() : 'Selecione o arquivo PDF'}
+          </h3>
+          <p className="text-xs text-text-muted max-w-sm mb-6">
+            O documento será processado de forma 100% segura e offline no seu computador.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleSelectPrimary}
+              disabled={processing}
+              className="px-5 py-2.5 rounded-xl border border-border text-xs font-semibold text-text hover:bg-surface-hover transition-colors disabled:opacity-50"
+            >
+              {filePrimary ? 'Trocar arquivo' : 'Buscar arquivo'}
+            </button>
+            {filePrimary && (
+              <button
+                onClick={handleProcess}
+                disabled={processing}
+                className="px-6 py-2.5 rounded-xl bg-[#1a3a5c] text-white text-xs font-semibold hover:bg-[#153250] transition-colors disabled:opacity-50 shadow-sm"
+              >
+                {processing ? 'Processando...' : 'Iniciar Processamento'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {progressInfo && (
+          <div className="bg-white border border-border rounded-2xl p-6 shadow-sm flex flex-col gap-3">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-semibold text-text">{progressInfo.message}</span>
+              <span className="font-mono text-text-muted">{progressInfo.progress}%</span>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-[#1a3a5c] h-full transition-all duration-300 rounded-full"
+                style={{ width: `${progressInfo.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-xs">
+            {error}
+          </div>
+        )}
       </main>
     </div>
   );
