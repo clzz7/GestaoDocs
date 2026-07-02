@@ -1,59 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { Home, FileText, Shield, Code, Layers, Banknote, Stamp, FileOutput, ChevronDown, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Home, FileText, Shield, Stamp, Code, Layers, Banknote, FileOutput, Menu, ChevronDown } from 'lucide-react';
 import ResultsPanel from './components/ResultsPanel';
 import EfficiencyMetrics from './components/EfficiencyMetrics';
 import ToolPage from './components/ToolPage';
-import FgtsPage from './components/FgtsPage';
 import StampPage from './components/StampPage';
+import FgtsPage from './components/FgtsPage';
 import ConvertPage from './components/ConvertPage';
 import OrganizePage from './components/OrganizePage';
+
 import TitleBar from './components/TitleBar';
 import { isTauri } from './lib/tauri-api';
 
 function App() {
   const [page, setPage] = useState('home');
   const [results, setResults] = useState(null);
+  const [resultsModule, setResultsModule] = useState(null);
   const [error, setError] = useState(null);
   const [openGroups, setOpenGroups] = useState({ rh: true, pdf: true });
-  const [isDesktop, setIsDesktop] = useState(true);
 
-  useEffect(() => {
-    setIsDesktop(isTauri());
-  }, []);
+  const toggleGroup = (group) => {
+    setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
 
-  const toggleGroup = (g) => setOpenGroups(p => ({ ...p, [g]: !p[g] }));
-  const handleResults = (data) => { setResults(data); setPage('results'); };
-  const handleReset = () => { setResults(null); setPage('home'); };
+  const handleReset = () => {
+    setResults(null);
+    setResultsModule(null);
+    setError(null);
+    setPage('home');
+  };
 
-  const renderMenuItem = ({ id, label, icon: Icon }) => {
-    const active = page === id;
+  const handleResults = (data, module) => {
+    setResults(data);
+    setResultsModule(module);
+    setPage('results');
+  };
+
+  const renderMenuItem = (item) => {
+    const Icon = item.icon;
+    const isActive = page === item.id || (page === 'results' && item.id === resultsModule);
     return (
       <button
-        key={id}
-        onClick={() => {
-          setError(null);
-          setPage(id);
-        }}
-        className={`flex items-center gap-3 w-full px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${active ? 'bg-[#1a3a5c] text-white shadow-sm' : 'text-text-muted hover:bg-surface-hover hover:text-text'}`}
+        key={item.id}
+        onClick={() => setPage(item.id)}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 w-full text-left font-medium text-sm ${
+          isActive
+            ? 'bg-[#1a3a5c] text-white shadow-md shadow-[#1a3a5c]/20'
+            : 'text-text-muted hover:bg-surface-hover hover:text-text'
+        }`}
       >
-        <Icon className={`w-4 h-4 ${active ? 'text-white' : 'text-text-muted'}`} />
-        <span>{label}</span>
+        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-text-muted'}`} />
+        {item.label}
       </button>
     );
   };
 
   const renderContent = () => {
-    if (!isDesktop) {
+    if (!isTauri() && page === 'home') {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-fade-in">
-          <div className="max-w-md bg-white border border-border p-6 rounded-2xl shadow-sm flex flex-col items-center">
-            <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-4 border border-amber-100">
-              <AlertTriangle className="w-6 h-6 text-amber-600" />
-            </div>
-            <h3 className="text-lg font-bold text-text mb-2">Ambiente de Demonstração Web</h3>
-            <p className="text-xs text-text-muted leading-relaxed mb-6">
-              O <span className="font-semibold text-text">GestãoDocs</span> utiliza recursos nativos do sistema operacional via Tauri para automação e segurança. Algumas integrações não estão disponíveis no navegador.
-            </p>
+        <div className="flex-1 flex items-center justify-center p-10 animate-fade-in">
+          <div className="bg-red-50 border border-red-200 text-red-700 p-8 rounded-2xl max-w-md text-center shadow-sm">
+            <h3 className="text-xl font-bold mb-3">Atenção!</h3>
+            <p>O aplicativo precisa ser executado através da janela do Tauri.</p>
+            <p className="opacity-80 text-sm mt-4">Você provavelmente abriu este link no seu navegador. Feche esta janela e execute <b className="bg-red-100 px-1 py-0.5 rounded">npm run tauri dev</b> no terminal.</p>
           </div>
         </div>
       );
@@ -63,6 +71,9 @@ function App() {
       return (
         <div className="p-10 animate-fade-in">
           <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-start gap-3">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <div>
               <h4 className="font-bold">Erro no processamento</h4>
               <p className="text-sm opacity-90">{error}</p>
@@ -110,6 +121,7 @@ function App() {
   return (
     <div className="flex flex-col h-screen w-full bg-background font-sans text-text overflow-hidden">
       <TitleBar />
+
       <div className="flex flex-1 overflow-hidden">
         <aside className="w-64 bg-white border-r border-border flex flex-col shrink-0 z-10">
           <div className="p-5 flex-1 overflow-y-auto custom-scrollbar no-drag">
